@@ -5,65 +5,61 @@ import { uploadonclodinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/Apiresponse.js";
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { username, email, fullname,  password } = req.body;
+    const { username, email, fullname, password } = req.body;
+  
+    //console.log(req.body);
+  
+    // Check for required fields excluding avatar initially
+    if ([username, email, password, fullname].some((field) => field?.trim() === "")) {
+      throw new ApiError(400, "All fields are required");
+    }
+  
+    const existedUser = await User.findOne({
+      $or: [{ username }, { email }]
+    });
+  
+    if (existedUser) {
+      throw new ApiError(409, "User with email or username already exists");
+    }
+  
+    const avatarLocalPath = req.files?.avatar?.[0]?.path;
+    const coverimageLocalPath = req.files?.coverimage?.[0]?.path;
 
-    console.log(req.body);
+  
+    if (!avatarLocalPath) {
+      throw new ApiError(400, "Avatar file is required");
+    }
+  
+    const avatar = await uploadonclodinary(avatarLocalPath);
+    const coverimage = coverimageLocalPath ? await uploadonclodinary(coverimageLocalPath) : null;
+  
+    if (!avatar) {
+      throw new ApiError(400, "Failed to upload avatar");
+    }
+  
+    const user = await User.create({
+      fullname,
+      avatar: avatar.url,
+      coverimage: coverimage?.url || "",
+      email,
+      password,
+      username: username.toLowerCase()
+    });
+  
+    const createdUser = await User.findById(user._id).select("-password -refreshToken");
+  
+    if (!createdUser) {
+      throw new ApiError(500, "Something went wrong while registering the user");
+    }
+  
+    return res.status(201).json(
+      new ApiResponse(200, createdUser, "User registered successfully")
+    );
 
 
 //   if (!username || !email || !fullname || !avatar || !password) {
 //     return res.status(400).json({ message: "All fields are required" });
 //   }
-
-    if(
-        [username, email, password, fullname, avatar].some((field) =>
-        field?.trim() === "")
-    ){
-        throw new ApiError(400, "All fields are required")
-    }
-
-    const existedUser = User.findOne({
-        $or: [{ username}, {email}]
-    })
-
-    if(existedUser){
-        throw new ApiError(409, "User with email or username  already existed")
-    }
-
-    const avatarLocalPath = req.files?.avatar[0]?.path
-    const coverimageLocalPath = req.files?.coverimage[0]?.path
-
-    if(!avatarLocalPath){
-        throw new ApiError(400, "Avatar file is required")
-    }
-
-    const avatar = await uploadonclodinary(avatarLocalPath)
-    const coverimage = await uploadonclodinary(coverimageLocalPath)
-
-    if(!avatar){
-        throw new ApiError(400, "Avatar file is required")
-    }
-
-    const user = await User.create({
-        fullname,
-        avatar: avatar.url,
-        coverimage: coverimage?.url || "",
-        email,
-        password,
-        username: username.toLowerCase()
-    })
-
-    const createduser = await User.findById(user._id).select(
-        "-password -refreshToken"
-    )
-
-    if(!createduser){
-        throw new ApiError(500, "spmething went wrong while registering the user")
-    }
-
-    return res.status(201).json(
-        new ApiResponse(200, createduser, "User register successfully")
-    )
-
 //   const userExists = await User.findOne({ email });
 
 //   if (userExists) {
